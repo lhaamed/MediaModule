@@ -4,40 +4,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Filesystem Disk
+    | Default disk
     |--------------------------------------------------------------------------
-    |
-    | مشخص می‌کنه که فایل‌ها کجا ذخیره بشن.
-    | می‌تونی هر دیسکی که توی config/filesystems.php تعریف شده استفاده کنی
-    | (مثلاً: local, public, s3).
-    |
+    | Disk used by MediaFacade::upload() when none is given.
     */
-
-    'disk' => env('MEDIAMODULE_DISK', 'public'),
-    'disks' => explode(',',env('MEDIAMODULE_DISKS', 'public')),
+    'disk' => env('MEDIA_DISK', 'media'),
 
     /*
     |--------------------------------------------------------------------------
-    | Base Directory
+    | Allowed disks
     |--------------------------------------------------------------------------
-    |
-    | مسیر پایه‌ای که همه فایل‌های این پکیج توی اون ذخیره می‌شن.
-    | می‌تونی تغییرش بدی تا توی یک فولدر خاص نگه‌داری بشن.
-    |
+    | Disks new uploads may go to (comma separated in .env). Existing media
+    | always use the disk stored on their own row.
     */
-
-    'base_directory' => env('MEDIAMODULE_BASE_DIR', 'lhaamed'),
+    'disks' => array_map('trim', explode(',', env('MEDIA_DISKS', 'public'))),
 
     /*
     |--------------------------------------------------------------------------
-    | Blocked Extensions
+    | Blocked extensions
     |--------------------------------------------------------------------------
-    |
-    | Uploads whose final extension is in this list are rejected.
-    | Any other mime type is accepted.
-    |
+    | Uploads whose final extension is listed here are rejected.
+    | Any other type is accepted.
     */
-
     'blocked_extensions' => [
         'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pht', 'phps', 'phar',
         'htaccess', 'cgi', 'pl', 'py', 'sh', 'bash',
@@ -46,16 +34,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Thumbnailable mimes
+    | Thumbnailable MIME types
     |--------------------------------------------------------------------------
-    |
-    | Uploads whose final extension is in this list are rejected.
-    | Any other mime type is accepted.
-    |
+    | Only these types get thumbnails (they must be readable by the image
+    | driver). Everything else returns the media itself from ->thumbnail().
     */
-
     'thumbnailable_mimes' => [
-        'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Placeholder
+    |--------------------------------------------------------------------------
+    | Path (relative to public/) returned by ->url() when the file is missing.
+    */
+    'placeholder' => 'assets/default-images/default-gallery-photo.png',
 
 ];

@@ -6,20 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
+        // Existing installs (v1 schema) are converted by the upgrade migration.
+        if (Schema::hasTable('media')) {
+            return;
+        }
+
         Schema::create('media', function (Blueprint $table) {
             $table->id();
-            $table->string('file_name')->unique()->index(); // stored name (path relative to disk)
-            $table->string('original_name')->index(); // name the user uploaded
-            $table->string('extension',20)->nullable();
-            $table->string('mime_type',127)->index();
-            $table->string('disk',50)->default('media');
-            $table->unsignedBigInteger('size')->default(0); // bytes
-            $table->char('hash', 64)->nullable()->index();  // sha256, for dedupe / disk migration
+            $table->string('file_name');                      // slug of the original name, no extension
+            $table->string('original_name')->index();         // exactly what the client sent
+            $table->string('extension', 20)->nullable();
+            $table->string('mime_type', 127)->index();        // detected from file content
+            $table->string('disk', 50);
+            $table->unsignedBigInteger('size')->default(0);   // bytes
+            $table->char('hash', 64)->nullable()->index();    // sha256
             $table->string('alt')->nullable();
             $table->text('description')->nullable();
             $table->unsignedBigInteger('uploaded_by')->nullable()->index();
@@ -42,9 +44,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('mediaables');

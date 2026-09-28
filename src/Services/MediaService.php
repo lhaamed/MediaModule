@@ -2,23 +2,26 @@
 
 namespace lhaamed\MediaModule\Services;
 
-use App\Facades\Alert;
-use App\Models\Setting;
 use Exception;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Interfaces\ImageInterface;
 use lhaamed\MediaModule\Models\Media;
 use lhaamed\MediaModule\Models\MediaThumbnail;
+use Symfony\Component\Mime\MimeTypes;
+use Throwable;
 
 class MediaService
 {
+    // UPLOAD / REPLACE
 
     /**
+     * @param array{alt?: string, description?: string} $options
      * @throws Exception
      */
     public function upload(UploadedFile $file, array $options = [], ?string $disk = null): Media
@@ -28,20 +31,11 @@ class MediaService
         if (!in_array($disk, config('media.disks'), true)) {
             throw new Exception('the chosen disk is unavailable.', 403);
         }
-        if (!$file->isValid()) {
-            throw new Exception($file->getErrorMessage(), 422);
-        }
-
-        // mime comes from file content, never from the client.
-        $mimeType = $file->getMimeType() ?: 'application/octet-stream';
 
         $media = new Media([
+            ...self::describe($file),
             'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
             'file_name' => self::generateUniqueName($file->getClientOriginalName(), $disk),
-            'extension' => self::resolveExtension($file, $mimeType),
-            'mime_type' => $mimeType,
-            'size' => $file->getSize(),
-            'hash' => hash_file('sha256', $file->getRealPath()),
             'disk' => $disk,
             'alt' => $options['alt'] ?? null,
             'description' => $options['description'] ?? null,
@@ -50,9 +44,9 @@ class MediaService
         // set before storing: the directory (Y-m) is derived from created_at,
         // so the file and the record can never disagree at a month boundary.
         $media->created_at = now();
+        $path = $media->storagePath();
 
-        $stored = $file->storeAs($media->dateDirectoryFormat(), $media->file_full_name, ['disk' => $disk]);
-        if ($stored === false) {
+        if ($file->storeAs(dirname($path), basename($path), ['disk' => $disk]) === false) {
             throw new Exception('something bad happened in moving file to directory.', 500);
         }
 
@@ -60,33 +54,223 @@ class MediaService
             $media->save();
         } catch (Throwable $e) {
             // do not leave an orphan file behind (e.g. unique violation from a concurrent upload).
-            Storage::disk($disk)->delete($stored);
+            Storage::disk($disk)->delete($path);
             throw $e;
         }
 
         return $media;
     }
 
-    public function replace(UploadedFile $file, Media $media, array $options = [])
+    /**
+     * Replaces the content of a media. file_name (and so the URL base) stays, the extension may change.
+     *
+     * @param array{alt?: string|null, description?: string|null} $options
+     * @throws Exception
+     */
+    public function replace(UploadedFile $file, Media $media, array $options = []): Media
     {
-        return DB::transaction(function () use ($options, $file, $media) {
-            $media->mime_type = self::extractFileMimeType($file);
-            if (array_key_exists('key', $options)) $media->key = $options['key'];
+        $oldPath = $media->storagePath();
 
-            if ($media->fileExists()) {
-                unlink($media->pathToFile());
+        $media->fill([
+            ...self::describe($file),
+            'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
+        ]);
+        if (array_key_exists('alt', $options)) $media->alt = $options['alt'];
+        if (array_key_exists('description', $options)) $media->description = $options['description'];
+
+        $newPath = $media->storagePath();
+
+        DB::transaction(function () use ($media, $file, $newPath) {
+            $media->save();
+
+            if ($file->storeAs(dirname($newPath), basename($newPath), ['disk' => $media->disk]) === false) {
+                throw new Exception('something bad happened in moving file to directory.', 500);
+            }
+        });
+
+        // old file goes only after the new one is safely stored.
+        if ($oldPath !== $newPath) {
+            Storage::disk($media->disk)->delete($oldPath);
+        }
+
+        // existing thumbnails were built from the old content.
+        $media->thumbnails->each->delete();
+
+        return $media;
+    }
+
+    // THUMBNAILS
+
+    /**
+     * Returns null when no thumbnail is possible: unsupported type, or the requested size
+     * is larger than the original (no upscaling).
+     *
+     * Without $height the image is scaled proportionally to $width; with it, it is resized to exactly that size.
+     *
+     * @throws Exception
+     */
+    public function generateThumbnail(Media $media, int $width, ?int $height = null): ?MediaThumbnail
+    {
+        if ($width < 1 || ($height !== null && $height < 1)) {
+            throw new Exception('thumbnail size must be positive.', 422);
+        }
+        if (!$media->isThumbnailable()) {
+            return null;
+        }
+
+        $image = self::readImage($media);
+
+        if ($width > $image->width() || ($height !== null && $height > $image->height())) {
+            return null;
+        }
+
+        $height === null
+            ? $image->scale(width: $width)
+            : $image->resize($width, $height);
+
+        $realWidth = $image->width();
+        $realHeight = $image->height();
+
+        // scale mode can land on a size that already exists.
+        $existing = $media->thumbnails()->where('width', $realWidth)->where('height', $realHeight)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $path = self::thumbnailPath($media, $realWidth, $realHeight);
+        $contents = $image->encodeByMediaType($media->mime_type)->toString();
+        Storage::disk($media->disk)->put($path, $contents);
+
+        try {
+            return MediaThumbnail::create([
+                'media_id' => $media->id,
+                'file_name' => $path,
+                'width' => $realWidth,
+                'height' => $realHeight,
+                'size' => strlen($contents),
+            ]);
+        } catch (QueryException $e) {
+            // a concurrent request created the same thumbnail first.
+            $existing = $media->thumbnails()->where('width', $realWidth)->where('height', $realHeight)->first();
+            if ($existing) {
+                return $existing;
             }
 
-            if (self::moveFileToDisk($file, $media->file_full_name, $media->disk)) {
-                $media->save();
-                File::ensureDirectoryExists($media->pathToDirectory() . '/thumbnails');
+            Storage::disk($media->disk)->delete($path);
+            throw $e;
+        }
+    }
 
-                foreach ($media->thumbnails as $thumbnail) {
-                    $this->deleteThumbnail($thumbnail);
+    /**
+     * Rebuilds a missing thumbnail file from the original.
+     *
+     * @throws Exception
+     */
+    public function repairThumbnail(MediaThumbnail $thumbnail): void
+    {
+        $thumbnail->load('media');
+        $media = $thumbnail->media;
+
+        if (!$media || !$media->isThumbnailable()) {
+            throw new Exception('the thumbnail cannot be repaired.', 422);
+        }
+
+        $contents = self::readImage($media)
+            ->resize($thumbnail->width, $thumbnail->height)
+            ->encodeByMediaType($media->mime_type)
+            ->toString();
+
+        Storage::disk($media->disk)->put($thumbnail->file_name, $contents);
+        $thumbnail->update(['size' => strlen($contents)]);
+    }
+
+    // RENAME / DELETE
+
+    /**
+     * Renames the stored file. The name is slugged, so the final name is returned.
+     * The model is saved here, together with the file move.
+     *
+     * @throws Exception
+     */
+    public function renameMedia(Media $media, string $newName): string
+    {
+        $name = self::slugify($newName);
+
+        if ($name === $media->file_name) {
+            return $name;
+        }
+        if (Media::where('disk', $media->disk)->where('file_name', $name)->exists()) {
+            throw new Exception("the name '{$name}' is already taken.", 422);
+        }
+
+        $disk = Storage::disk($media->disk);
+        $oldName = $media->file_name;
+        $oldPath = $media->storagePath();
+
+        try {
+            return DB::transaction(function () use ($media, $name, $disk, $oldPath) {
+                $media->file_name = $name;
+                $media->save();
+                $newPath = $media->storagePath();
+
+                if (!$disk->exists($oldPath)) {
+                    throw new Exception('the file is missing, so the rename was aborted.', 404);
                 }
-                return $media;
-            } else throw new Exception('something bad happened in moving file to directory.', 403);
-        });
+                if ($disk->exists($newPath)) {
+                    throw new Exception('a file with this name already exists on the disk.', 409);
+                }
+                if (!$disk->move($oldPath, $newPath)) {
+                    throw new Exception('changing the file name failed.', 500);
+                }
+
+                return $name;
+            });
+        } catch (Throwable $e) {
+            // the transaction rolled the row back; put the in-memory model back too.
+            $media->setAttribute('file_name', $oldName);
+            $media->syncOriginalAttribute('file_name');
+            throw $e;
+        }
+    }
+
+    public function deleteMedia(Media $media): bool
+    {
+        return (bool) $media->delete();
+    }
+
+    public function deleteThumbnail(MediaThumbnail $thumbnail): bool
+    {
+        return (bool) $thumbnail->delete();
+    }
+
+    // HELPERS
+
+    /**
+     * mime comes from the file content, never from the client.
+     *
+     * @return array{mime_type: string, extension: string, size: int, hash: string}
+     * @throws Exception
+     */
+    private static function describe(UploadedFile $file): array
+    {
+        if (!$file->isValid()) {
+            throw new Exception($file->getErrorMessage(), 422);
+        }
+
+        $mimeType = $file->getMimeType() ?: 'application/octet-stream';
+
+        return [
+            'mime_type' => $mimeType,
+            'extension' => self::resolveExtension($file, $mimeType),
+            'size' => $file->getSize(),
+            'hash' => hash_file('sha256', $file->getRealPath()),
+        ];
+    }
+
+    private static function slugify(string $name): string
+    {
+        // non-latin names can slug to '' so fall back to "file".
+        return rtrim(Str::limit(Str::slug($name), 200, ''), '-') ?: 'file';
     }
 
     /**
@@ -95,8 +279,7 @@ class MediaService
      */
     private static function generateUniqueName(string $originalName, string $disk): string
     {
-        $base = Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
-        $base = rtrim(Str::limit($base, 200, ''), '-') ?: 'file'; // non-latin names can slug to ''
+        $base = self::slugify(pathinfo($originalName, PATHINFO_FILENAME));
 
         // slug only contains [a-z0-9-], so it is safe inside LIKE.
         $taken = Media::where('disk', $disk)
@@ -108,6 +291,7 @@ class MediaService
 
         $i = 1;
         while (in_array("{$base}-{$i}", $taken, true)) $i++;
+
         return "{$base}-{$i}";
     }
 
@@ -137,186 +321,22 @@ class MediaService
         return $extension;
     }
 
-    private static function extractFileMimeType(UploadedFile $file): string
+    private static function thumbnailPath(Media $media, int $width, int $height): string
     {
-        return strtolower($file->getClientOriginalExtension());
-    }
-
-    private static function moveFileToDisk(UploadedFile $file, string $file_full_name, string $disk): false|string
-    {
-        return DB::transaction(function () use ($file, $file_full_name, $disk) {
-            $result = $file->storeAs(date('Y-m'), $file_full_name, $disk);
-            self::calculateOccupiedStorage();
-            return $result;
-        });
-    }
-
-    public function generateThumbnail(Media $media, string $width, $height = null)
-    {
-        if (is_null($height)) $flag = 'scale';
-        else $flag = 'resize';
-        File::ensureDirectoryExists($media->pathToDirectory() . '/thumbnails');
-        return DB::transaction(function () use ($flag, $media, $width, $height) {
-            $thumbnail = new MediaThumbnail();
-            $thumbnail->media_id = $media->id;
-            if ($media->getFileWidth() >= $width) {
-                // create image manager with desired driver
-                $ImageManager = new ImageManager(new Driver());
-                $image = $ImageManager->read($media->pathToFile());
-                if ($flag == 'scale') {
-                    // if this is a scale operation. first I have to scale to image to find final height. then store the thumbnail record in database.
-                    if (!$media->thumbnails()->where('width', $width)->exists()) {
-                        // first the thumbnail record must not be exists and the width must be smaller than original photo
-                        $image->scale(width: $width); // 400 x 300
-                        $thumbnail->width = $image->width();
-                        $thumbnail->height = $image->height();
-                        $thumbnail->save();
-                        if (!$thumbnail->fileExists()) {
-                            $image->save($thumbnail->pathToFile());
-                            if (!$thumbnail->fileExists()) {
-                                throw new Exception('failed to save thumbnail file');
-                            }
-                        }
-                        return $thumbnail;
-                    } else return $media->thumbnails()->where('width', $width)->first();
-                } elseif ($flag == 'resize') {
-                    // if this is a resize operation. both width and height are indicated and there is nothing to doubt. we can create the db record and then resize the image.
-                    if (!$media->thumbnails()->where('width', $width)->where('height', $height)->exists() && $media->getFileHeight() >= $height) {
-                        // first the thumbnail record must not be exists and the width must be smaller than original photo
-
-                        $image->resize($width, $height); // 400 x 300
-                        $thumbnail->width = $image->width();
-                        $thumbnail->height = $image->height();
-                        $thumbnail->save();
-                        if (!$thumbnail->fileExists()) {
-                            $image->save($thumbnail->pathToFile());
-                            if (!$thumbnail->fileExists()) {
-                                throw new Exception('failed to save thumbnail file');
-                            }
-                        }
-                        return $thumbnail;
-                    } else $media->thumbnails()->where('width', $width)->where('height', $height)->first();
-                } else throw new Exception(403, 'unrecognized operation found.');
-            } else throw new Exception('width is larger than original file.');
-            return $thumbnail;
-        });
-    }
-
-    public function deleteMedia(Media $media)
-    {
-        return DB::transaction(function () use ($media) {
-            foreach ($media->thumbnails as $thumbnail) {
-                self::deleteThumbnail($thumbnail);
-            }
-            if ($media->fileExists()) {
-                unlink($media->pathToFile());
-                $this->calculateOccupiedStorage();
-            }
-            return $media->delete();
-        });
-    }
-
-    public function deleteThumbnail(MediaThumbnail $mediaThumbnail)
-    {
-        return DB::transaction(function () use ($mediaThumbnail) {
-            if ($mediaThumbnail->fileExists())
-                unlink($mediaThumbnail->pathToFile());
-            return $mediaThumbnail->delete();
-        });
-    }
-
-    public function repairThumbnail(MediaThumbnail $mediaThumbnail): void
-    {
-        // this line helps us to retrieve the latest updates of Media record.
-        $mediaThumbnail->load('media');
-
-        // create image manager with desired driver
-        File::ensureDirectoryExists($mediaThumbnail->media->pathToDirectory() . '/thumbnails');
-        $ImageManager = new ImageManager(new Driver());
-
-        $image = $ImageManager->read($mediaThumbnail->media->pathToFile());
-        if ($mediaThumbnail->height == null) {
-            $image->scale(width: $mediaThumbnail->width);
-        } else {
-            $image->resize($mediaThumbnail->width, $mediaThumbnail->height); // 400 x 300
-        }
-        if (!$mediaThumbnail->fileExists()) {
-            $image->save($mediaThumbnail->pathToFile());
-        }
-    }
-
-    public function renameMedia(Media $media, string $new_name): bool
-    {
-        $old_name = $media->file_name;
-        // first of all we need to delete all thumbnails that exist for this photo.
-        return DB::transaction(function () use ($new_name, $media) {
-            foreach ($media->thumbnails as $thumbnail) {
-                if ($thumbnail->fileExists())
-                    unlink($thumbnail->pathToFile());
-            }
-            // then we need to rename the file.
-            if ($media->fileExists()) {
-                $old_file_path = $media->dateDirectoryFormat() . '/' . $media->file_full_name;
-                $new_file_path = $media->dateDirectoryFormat() . '/' . $new_name . '.' . $media->mime_type;
-                if (Storage::disk($media->disk)->move($old_file_path, $new_file_path)) {
-                    return true;
-                } else {
-                    throw new Exception('changing file named failed.');
-                }
-            } else throw new Exception('the file is missing. so the changing process aborted.');
-        });
+        return "{$media->dateDirectoryFormat()}/thumbnails/{$media->file_name}-{$width}x{$height}.{$media->extension}";
     }
 
     /**
-     * @throws \Throwable
+     * @throws Exception
      */
-    private static function calculateOccupiedStorage(string|null $path = null): void
+    private static function readImage(Media $media): ImageInterface
     {
-        $flags = \FilesystemIterator::SKIP_DOTS;
+        $contents = Storage::disk($media->disk)->get($media->storagePath());
 
-        try {
-            if ($path === null) {
-                $path = dirname($_SERVER['DOCUMENT_ROOT']);
-            }
-
-            $size = 0;
-
-            if (is_dir($path)) {
-                $it = new \RecursiveIteratorIterator(
-                    new \RecursiveCallbackFilterIterator(
-                        @new \RecursiveDirectoryIterator($path, $flags),
-                        function ($current, $key, $iterator) {
-                            try {
-                                // فقط مسیرهایی که قابل دسترسی هستن
-                                return $current->isDir() || $current->isFile();
-                            } catch (\Throwable) {
-                                // مسیر غیرمجاز، نادیده گرفته می‌شود
-                                return false;
-                            }
-                        }
-                    ),
-                    \RecursiveIteratorIterator::SELF_FIRST
-                );
-
-                foreach ($it as $file) {
-                    try {
-                        // اگر سمبلینک هست و نمی‌خوای دنبال بشه:
-                        if ($file->isFile() && !$file->isLink()) {
-                            $size += $file->getSize();
-                        }
-                    } catch (\Throwable $e) {
-                        // مسیر غیرمجاز یا خطا، نادیده گرفته میشه
-                        continue;
-                    }
-                }
-            }
-
-            Setting::getByKey('disk_occupied_size')->handleUpdate(['value' => $size]);
-
-        } catch (\Throwable $exception) {
-            Alert::defaultToastError($exception->getMessage());
-            throw $exception;
+        if ($contents === null) {
+            throw new Exception('the file is missing.', 404);
         }
-    }
 
+        return (new ImageManager(new Driver()))->read($contents);
+    }
 }

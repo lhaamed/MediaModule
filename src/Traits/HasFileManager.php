@@ -1,11 +1,17 @@
 <?php
 
-
 namespace lhaamed\MediaModule\Traits;
 
 use Illuminate\Support\Facades\Storage;
 
-trait hasFileManager
+/**
+ * File helpers shared by Media and MediaThumbnail.
+ *
+ * The using model must provide:
+ *  - a `disk` attribute
+ *  - storagePath(): the file path relative to the disk root
+ */
+trait HasFileManager
 {
     abstract public function storagePath(): string;
 

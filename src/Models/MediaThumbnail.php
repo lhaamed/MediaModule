@@ -6,11 +6,11 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
-use lhaamed\MediaModule\Traits\hasFileManager;
+use lhaamed\MediaModule\Traits\HasFileManager;
 
 class MediaThumbnail extends Model
 {
-    use hasFileManager;
+    use HasFileManager;
 
     /**
      * file_name is the thumbnail path relative to the disk root,

@@ -73,8 +73,8 @@ php artisan vendor:publish --tag=MediaModule-traits
 
 
 ```bash
-MEDIAMODULE_DISK=public
-MEDIAMODULE_DISK_DISKS=public,other_disks
+MEDIA_DISK=public
+MEDIA_DISK_DISKS=public,other_disks
 ```
 
 
