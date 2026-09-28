@@ -12,27 +12,34 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('media', function (Blueprint $table) {
-            $table->increments('id');
-            $table->string('key')->nullable();
-            $table->string('file_name')->unique()->index();
-            $table->string('mime_type',6);
-            $table->string('disk',10)->default('media');
-            $table->string('alt',255)->nullable();
+            $table->id();
+            $table->string('file_name')->unique()->index(); // stored name (path relative to disk)
+            $table->string('original_name')->index(); // name the user uploaded
+            $table->string('extension',20)->nullable();
+            $table->string('mime_type',127)->index();
+            $table->string('disk',50)->default('media');
+            $table->unsignedBigInteger('size')->default(0); // bytes
+            $table->char('hash', 64)->nullable()->index();  // sha256, for dedupe / disk migration
+            $table->string('alt')->nullable();
             $table->text('description')->nullable();
-            $table->unsignedBigInteger('uploaded_by')->nullable();
+            $table->unsignedBigInteger('uploaded_by')->nullable()->index();
             $table->timestamps();
+
+            $table->unique(['disk', 'file_name']);
+            $table->index('mime_type');
         });
 
         Schema::create('mediaables', function (Blueprint $table) {
             $table->id();
-            $table->unsignedInteger('media_id');
+            $table->foreignId('media_id')->constrained('media')->cascadeOnDelete();
             $table->morphs('mediaable');
+            $table->string('collection', 100)->default('default');
+            $table->unsignedInteger('order')->default(0);
 
-            //FOREIGN KEY CONSTRAINTS
-            $table->foreign('media_id')
-                ->references('id')
-                ->on('media')
-                ->onDelete('CASCADE');
+            $table->unique(
+                ['media_id', 'mediaable_type', 'mediaable_id', 'collection'],
+                'mediaables_unique'
+            );
         });
     }
 

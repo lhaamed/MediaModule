@@ -12,18 +12,16 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('media_thumbnails', function (Blueprint $table) {
-            $table->increments('id');
-            $table->unsignedInteger('media_id')->nullable();
-            $table->smallInteger('width');
-            $table->smallInteger('height')->nullable();
+            $table->id();
+            $table->string('file_name'); // stored thumbnail path relative to media disk
+            $table->foreignId('media_id')->constrained('media')->cascadeOnDelete();
+            $table->unsignedSmallInteger('width');
+            $table->unsignedSmallInteger('height')->nullable();
+            $table->unsignedBigInteger('size')->default(0); // bytes
+            $table->timestamps();
 
+            $table->unique(['media_id', 'width', 'height']);
 
-            // if the media deletes. the thumbnail will delete immediately.
-            $table->foreign('media_id')
-                ->references('id')
-                ->on('media')
-                ->onDelete('cascade')
-                ->onUpdate('cascade');
         });
     }
 
