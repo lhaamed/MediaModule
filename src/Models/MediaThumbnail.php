@@ -12,108 +12,74 @@ class MediaThumbnail extends Model
 {
     use hasFileManager;
 
+    /**
+     * file_name is the thumbnail path relative to the disk root,
+     * e.g. "2026-09/thumbnails/mania-service-logo-400x300.png".
+     */
     protected $fillable = [
         'media_id',
+        'file_name',
         'width',
         'height',
+        'size',
     ];
 
-    /**
-     * Indicates if the model should be timestamped.
-     * @var bool
-     */
-    public $timestamps = false;
+    protected $casts = [
+        'width' => 'integer',
+        'height' => 'integer',
+        'size' => 'integer',
+    ];
 
-    protected static function booted()
+    protected static function booted(): void
     {
-        self::deleting(function (MediaThumbnail $mediaThumbnail) {
-            if ($mediaThumbnail->fileExists()) unlink(public_path($mediaThumbnail->pathToFile()));
+        static::deleted(function (MediaThumbnail $thumbnail) {
+            $disk = $thumbnail->disk;
+
+            if ($disk) {
+                Storage::disk($disk)->delete($thumbnail->file_name);
+            }
         });
     }
+
+    // RELATIONS
 
     public function media(): BelongsTo
     {
         return $this->belongsTo(Media::class);
     }
 
-    // GETTER
-
-
-    protected function width(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $value,
-        );
-    }
-
-    protected function height(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $value,
-        );
-    }
-
-    protected function size(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => "{$this->width}-{$this->height}",
-        );
-    }
-
-    protected function fileName(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $this->media->file_name,
-        );
-    }
-
-    protected function mimeType(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $this->media->mime_type,
-        );
-    }
-
-    protected function fileFullName(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => "{$this->file_name}-{$this->size}.{$this->mime_type}",
-        );
-    }
+    // GETTERS (proxied from the parent media, so a thumbnail can be used wherever a Media is)
 
     protected function disk(): Attribute
     {
         return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $this->media->disk,
+            get: fn () => $this->media?->disk,
         );
     }
 
     protected function alt(): Attribute
     {
         return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $this->media->alt,
+            get: fn () => $this->media?->alt,
         );
     }
 
     protected function description(): Attribute
     {
         return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $this->media->description,
+            get: fn () => $this->media?->description,
         );
     }
 
-    public function dateDirectoryFormat(): string
+    protected function dimensions(): Attribute
     {
-        return $this->media->dateDirectoryFormat();
+        return Attribute::make(
+            get: fn (mixed $value, array $attributes) => "{$attributes['width']}x{$attributes['height']}",
+        );
     }
 
-
-    public function pathToDirectory(): string
+    public function storagePath(): string
     {
-        return Storage::disk($this->disk)->path('/') . $this->dateDirectoryFormat() . '/thumbnails';
-    }
-    public function DirectoryURL(): string
-    {
-        return Storage::disk($this->disk)->url('/') . $this->dateDirectoryFormat() . '/thumbnails';
+        return $this->file_name;
     }
 }

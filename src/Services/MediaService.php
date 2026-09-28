@@ -2,6 +2,8 @@
 
 namespace lhaamed\MediaModule\Services;
 
+use App\Facades\Alert;
+use App\Models\Setting;
 use Exception;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -19,26 +21,50 @@ class MediaService
     /**
      * @throws Exception
      */
-    public function upload(UploadedFile $file, array $options = [], $disk = null)
+    public function upload(UploadedFile $file, array $options = [], ?string $disk = null): Media
     {
-        if (is_null($disk)) $disk = config('MediaModule.disk');
-        $media = new Media();
+        $disk ??= config('media.disk');
 
-        if (in_array($disk, config('MediaModule.disks'))) {
-            return DB::transaction(function () use ($options, $disk, $file, $media) {
-                $media->mime_type = self::extractFileMimeType($file);
-                $media->disk = $disk;
-                $media->file_name = self::generateUniqueNameInDisk($file, $disk);
-                if (array_key_exists('key', $options)) $media->key = $options['key'];
+        if (!in_array($disk, config('media.disks'), true)) {
+            throw new Exception('the chosen disk is unavailable.', 403);
+        }
+        if (!$file->isValid()) {
+            throw new Exception($file->getErrorMessage(), 422);
+        }
 
-                if (self::moveFileToDisk($file, $media->file_full_name, $disk)) {
-                    $media->save();
-                    File::ensureDirectoryExists($media->pathToDirectory() . '/thumbnails');
-                    return $media;
-                } else throw new Exception('something bad happened in moving file to directory.', 403);
-            });
-        } else
-            return throw new Exception('the chosen disc is unavailable.', 403);
+        // mime comes from file content, never from the client.
+        $mimeType = $file->getMimeType() ?: 'application/octet-stream';
+
+        $media = new Media([
+            'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
+            'file_name' => self::generateUniqueName($file->getClientOriginalName(), $disk),
+            'extension' => self::resolveExtension($file, $mimeType),
+            'mime_type' => $mimeType,
+            'size' => $file->getSize(),
+            'hash' => hash_file('sha256', $file->getRealPath()),
+            'disk' => $disk,
+            'alt' => $options['alt'] ?? null,
+            'description' => $options['description'] ?? null,
+        ]);
+
+        // set before storing: the directory (Y-m) is derived from created_at,
+        // so the file and the record can never disagree at a month boundary.
+        $media->created_at = now();
+
+        $stored = $file->storeAs($media->dateDirectoryFormat(), $media->file_full_name, ['disk' => $disk]);
+        if ($stored === false) {
+            throw new Exception('something bad happened in moving file to directory.', 500);
+        }
+
+        try {
+            $media->save();
+        } catch (Throwable $e) {
+            // do not leave an orphan file behind (e.g. unique violation from a concurrent upload).
+            Storage::disk($disk)->delete($stored);
+            throw $e;
+        }
+
+        return $media;
     }
 
     public function replace(UploadedFile $file, Media $media, array $options = [])
@@ -63,38 +89,57 @@ class MediaService
         });
     }
 
-    private static function generateUniqueNameInDisk(UploadedFile $file, $disk): string
+    /**
+     * slug of the original name without extension, e.g. "Mania Service Logo.PNG" => "mania-service-logo".
+     * appends -1, -2, ... when the name is already taken on this disk.
+     */
+    private static function generateUniqueName(string $originalName, string $disk): string
     {
-        $originalName = self::slugifyFileOriginalName($file);
-        $generatedName = $originalName;
-        $allDiskMedias = Media::all()->where('disk', $disk);
-        if ($allDiskMedias->where('file_name', $originalName)->count()) {
-            $index = 1;
-            do {
-                $name = "{$originalName}-{$index}";
-                $index++;
-            } while ($allDiskMedias->where('file_name', $name)->count());
-            $generatedName = $name;
-        }
-        return $generatedName;
+        $base = Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
+        $base = rtrim(Str::limit($base, 200, ''), '-') ?: 'file'; // non-latin names can slug to ''
+
+        // slug only contains [a-z0-9-], so it is safe inside LIKE.
+        $taken = Media::where('disk', $disk)
+            ->where('file_name', 'like', $base . '%')
+            ->pluck('file_name')
+            ->all();
+
+        if (!in_array($base, $taken, true)) return $base;
+
+        $i = 1;
+        while (in_array("{$base}-{$i}", $taken, true)) $i++;
+        return "{$base}-{$i}";
     }
 
-    private static function extractFileOriginalName(UploadedFile $file): string
+    /**
+     * keep the client extension only when it is valid for the detected mime type
+     * (so "shell.php" with image content is stored as .png), then apply the deny list.
+     *
+     * @throws Exception
+     */
+    private static function resolveExtension(UploadedFile $file, string $mimeType): string
     {
-        return strtolower($file->getClientOriginalName());
+        $client = strtolower($file->getClientOriginalExtension());
+        $known = MimeTypes::getDefault()->getExtensions($mimeType);
+
+        if ($client !== '' && (empty($known) || in_array($client, $known, true))) {
+            $extension = $client;
+        } else {
+            $extension = $known[0] ?? 'bin';
+        }
+
+        $extension = substr(preg_replace('/[^a-z0-9]/', '', $extension), 0, 20) ?: 'bin';
+
+        if (in_array($extension, config('media.blocked_extensions', []), true)) {
+            throw new Exception("files of type .{$extension} are not allowed.", 422);
+        }
+
+        return $extension;
     }
 
     private static function extractFileMimeType(UploadedFile $file): string
     {
         return strtolower($file->getClientOriginalExtension());
-    }
-
-    private static function slugifyFileOriginalName(UploadedFile $file): string
-    {
-        $file_original_name = self::extractFileOriginalName($file);
-        $file_mime_type = self::extractFileMimeType($file);
-        return Str::slug(basename($file_original_name, ".{$file_mime_type}"));
-
     }
 
     private static function moveFileToDisk(UploadedFile $file, string $file_full_name, string $disk): false|string
@@ -227,7 +272,7 @@ class MediaService
      */
     private static function calculateOccupiedStorage(string|null $path = null): void
     {
-        /*$flags = \FilesystemIterator::SKIP_DOTS;
+        $flags = \FilesystemIterator::SKIP_DOTS;
 
         try {
             if ($path === null) {
@@ -271,7 +316,7 @@ class MediaService
         } catch (\Throwable $exception) {
             Alert::defaultToastError($exception->getMessage());
             throw $exception;
-        }*/
+        }
     }
 
 }

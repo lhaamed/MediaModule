@@ -26,7 +26,6 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['disk', 'file_name']);
-            $table->index('mime_type');
         });
 
         Schema::create('mediaables', function (Blueprint $table) {

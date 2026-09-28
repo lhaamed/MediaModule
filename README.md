@@ -120,7 +120,7 @@ $media = Media::find(1);
 ```bash
 MediaModule/
 ├── config/
-│ └── MediaModule.php
+│ └── media.php
 ├── database/
 ├── src/
 │ ├── Models/

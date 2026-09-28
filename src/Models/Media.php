@@ -2,14 +2,15 @@
 
 namespace lhaamed\MediaModule\Models;
 
+use App\Models\User;
 use lhaamed\MediaModule\MediaFacade;
 use lhaamed\MediaModule\Traits\hasFileManager;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class Media extends Model
@@ -17,30 +18,41 @@ class Media extends Model
     use hasFileManager;
 
     protected $fillable = [
-        'key',
+        'original_name',
         'file_name',
+        'extension',
         'mime_type',
+        'size',
+        'hash',
         'disk',
         'alt',
         'description',
         'uploaded_by'
     ];
 
-    protected static function boot(): void
+
+    protected $casts = [
+        'size' => 'integer',
+    ];
+
+    protected static function booted(): void
     {
         parent::boot();
 
-        self::deleting(function (Media $media) {
-            if ($media->fileExists()) {
-                unlink(public_path($media->pathToFile()));
-                $media->thumbnails()->delete();
+        // thumbnails first: each model removes its own row and file.
+        static::deleting(function (Media $media) {
+            $media->thumbnails->each->delete();
+        });
+
+        static::creating(function (Media $media) {
+            if (is_null($media->uploaded_by) && auth()->check()) {
+                $media->uploaded_by = auth()->id();
             }
         });
 
-        self::creating(function (Media $media) {
-            if (auth()->check()) {
-                $media->uploaded_by = auth()->id();
-            }
+        // main file last, only after the row is really gone.
+        static::deleted(function (Media $media) {
+            Storage::disk($media->disk)->delete($media->storagePath());
         });
     }
 
@@ -56,52 +68,33 @@ class Media extends Model
 
     // GETTERS
 
-    protected function fileName(): Attribute
-    {
-        return Attribute::make(
-            get: fn(string $value, array $attributes) => $value,
-        );
-    }
-
-    protected function mimeType(): Attribute
-    {
-        return Attribute::make(
-            get: fn(string $value, array $attributes) => $value,
-        );
-    }
 
     protected function fileFullName(): Attribute
     {
         return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $attributes['file_name'] . '.' . $attributes['mime_type'],
-        );
-    }
+            get: function (mixed $value, array $attributes) {
+                $extension = $attributes['extension'] ?? null;
 
-    protected function disk(): Attribute
-    {
-        return Attribute::make(
-            get: fn(string $value, array $attributes) => $value,
-        );
-    }
-
-    protected function alt(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $value,
-        );
-    }
-
-    protected function description(): Attribute
-    {
-        return Attribute::make(
-            get: fn(mixed $value, array $attributes) => $value,
+                return $extension
+                    ? "{$attributes['file_name']}.{$extension}"
+                    : $attributes['file_name'];
+            },
         );
     }
 
     public function dateDirectoryFormat(): string
     {
-        return Carbon::createFromFormat('Y-m-d H:i:s', $this->created_at)->format('Y-m');
+        return $this->created_at->format('Y-m');
     }
+
+    /**
+     * path relative to the disk root, for use with Storage::disk($media->disk).
+     */
+    public function storagePath(): string
+    {
+        return $this->dateDirectoryFormat() . '/' . $this->file_full_name;
+    }
+
 
     public function thumbnail($width, $height = null)
     {
@@ -131,15 +124,15 @@ class Media extends Model
 
     public function handleUpdate(array $request)
     {
-//        $request = Help::selectFromArray($request, ['file_name', 'alt', 'description']);
         return DB::transaction(function () use ($request) {
             if (isset($request['file_name']) && $this->file_name !== $request['file_name']) {
                 if (MediaFacade::renameMedia($this, $request['file_name'])) {
                     $this->file_name = $request['file_name'];
                 }
             }
-            if (isset($request['alt'])) $this->alt = $request['alt'];
-            if (isset($request['description'])) $this->description = $request['description'];
+            // array_key_exists: lets the caller clear alt/description by sending null.
+            if (array_key_exists('alt', $request)) $this->alt = $request['alt'];
+            if (array_key_exists('description', $request)) $this->description = $request['description'];
             $this->saveOrFail();
             foreach ($this->thumbnails as $thumbnail) {
                 if (!$thumbnail->fileExists()) {

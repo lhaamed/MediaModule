@@ -15,7 +15,7 @@ class MediaServiceProvider extends ServiceProvider
     public function register(): void
     {
 
-        $this->mergeConfigFrom(__DIR__ . '/../config/MediaModule.php','MediaModule');
+        $this->mergeConfigFrom(__DIR__ . '/../config/media.php','media');
 
         $this->app->singleton(MediaService::class, function (Application $app) {
             return new MediaService();
@@ -29,8 +29,8 @@ class MediaServiceProvider extends ServiceProvider
     {
 
         $this->publishes([
-            __DIR__ . '/../config/MediaModule.php' => config_path('MediaModule.php'),
-        ],['MediaModule','config','MediaModule-config']);
+            __DIR__ . '/../config/media.php' => config_path('media.php'),
+        ],['media','config','media-config']);
 
 
         // Migrations
