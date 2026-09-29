@@ -28,10 +28,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "MediaModule\\MediaServiceProvider"
+                "lhaamed\\MediaModule\\MediaServiceProvider"
             ],
             "aliases": {
-                "MediaFacade": "MediaModule\\MediaFacade"
+                "MediaFacade": "lhaamed\\MediaModule\\MediaFacade"
             }
         }
     }
