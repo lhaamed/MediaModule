@@ -1,7 +1,6 @@
 {
     "name": "lhaamed/media-module",
     "description": "filesystem for laravel",
-    "version": "1.0.0",
     "type": "library",
     "require": {
         "php": "^8.1",
