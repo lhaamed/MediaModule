@@ -52,27 +52,35 @@ return [
     |--------------------------------------------------------------------------
     | Path (relative to public/) returned by ->url() when the file is missing.
     */
-    'placeholder' => 'assets/default-images/default-gallery-photo.png',
+    'placeholder' => 'vendor/media/placeholders/png.png',
 
     'placeholders' => [
         // اول پسوند بررسی می‌شه
         'extensions' => [
-            'pdf'  => 'assets/default-images/types/pdf.png',
-            'doc'  => 'assets/default-images/types/word.png',
-            'docx' => 'assets/default-images/types/word.png',
-            'xls'  => 'assets/default-images/types/excel.png',
-            'xlsx' => 'assets/default-images/types/excel.png',
-            'zip'  => 'assets/default-images/types/archive.png',
-            'rar'  => 'assets/default-images/types/archive.png',
-            '7z'   => 'assets/default-images/types/archive.png',
-            'exe'  => 'assets/default-images/types/executable.png',
+            'csv'  => 'vendor/media/placeholders/csv.png',
+            'doc'  => 'vendor/media/placeholders/doc.png',
+            'docx' => 'vendor/media/placeholders/docx.png',
+            'gif'  => 'vendor/media/placeholders/gif.png',
+            'jpg'  => 'vendor/media/placeholders/jpg.png',
+            'json'  => 'vendor/media/placeholders/json.png',
+            'mp3'  => 'vendor/media/placeholders/mp3.png',
+            'mp4'  => 'vendor/media/placeholders/mp4.png',
+            'pdf'  => 'vendor/media/placeholders/pdf.png',
+            'png'  => 'vendor/media/placeholders/png.png',
+            'rar'  => 'vendor/media/placeholders/rar.png',
+            'txt'  => 'vendor/media/placeholders/txt.png',
+            'webm'  => 'vendor/media/placeholders/webm.png',
+            'webp'  => 'vendor/media/placeholders/webp.png',
+            'xls'  => 'vendor/media/placeholders/xls.png',
+            'xlsx' => 'vendor/media/placeholders/xlsx.png',
+            'zip'  => 'vendor/media/placeholders/zip.png',
         ],
 
         // بعد mime دقیق یا گروه mime (video/*)
         'mimes' => [
-            'video/*' => 'assets/default-images/types/video.png',
-            'audio/*' => 'assets/default-images/types/audio.png',
-            'image/*' => 'assets/default-images/types/image.png', // عکسی که فایلش گم شده
+            'video/*' => 'vendor/media/placeholders/mp4.png',
+            'audio/*' => 'vendor/media/placeholders/mp3.png',
+            'image/*' => 'vendor/media/placeholders/png.png', // عکسی که فایلش گم شده
         ],
     ],
 

@@ -29,6 +29,11 @@ class MediaServiceProvider extends ServiceProvider
             ], 'media-migrations');
 
             $this->commands([UpgradeMediaCommand::class]);
+
+            $this->publishes([
+                __DIR__ . '/../resources/file-icons' => public_path('vendor/media/placeholders'),
+            ], 'media-assets');
+
         }
     }
 }
