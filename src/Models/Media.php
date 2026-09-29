@@ -3,6 +3,7 @@
 namespace lhaamed\MediaModule\Models;
 
 use App\Traits\EssentialTrait;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -41,6 +42,11 @@ class Media extends Model
 
     protected static function booted(): void
     {
+
+        static::addGlobalScope('order', function (Builder $builder) {
+            $builder->orderBy('media.created_at', 'desc');
+        });
+
         static::creating(function (Media $media) {
             if (is_null($media->uploaded_by) && auth()->check()) {
                 $media->uploaded_by = auth()->id();
