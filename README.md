@@ -1,150 +1,224 @@
-# 📦 MediaModule
+<div align="center">
 
-پکیج MediaModule یک سیستم مدیریت رسانه (Media Management System) برای پروژه‌های لاراول است.
-با استفاده از این پکیج می‌توانید فایل‌ها و رسانه‌های خود را به‌راحتی مدیریت، ذخیره و بازیابی کنید.
+# MediaModule
+
+**File and media management for Laravel: uploads, polymorphic attachments and on-demand thumbnails.**
+
+![PHP](https://img.shields.io/badge/PHP-%5E8.1-777BB4?logo=php&logoColor=white)
+![Laravel](https://img.shields.io/badge/Laravel-10%20%7C%2011%20%7C%2012-FF2D20?logo=laravel&logoColor=white)
+![License](https://img.shields.io/github/license/lhaamed/MediaModule)
+![Release](https://img.shields.io/github/v/tag/lhaamed/MediaModule?label=release)
+
+</div>
 
 ---
 
-## 🚀 نصب
+## Table of contents
 
-ابتدا پکیج را از طریق مخزن گیتهاب در مسیر مورد نظر نصب کنید:
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Quick start](#quick-start)
+- [Usage](#usage)
+- [Thumbnails](#thumbnails)
+- [API reference](#api-reference)
+- [Upgrading from v1](#upgrading-from-v1)
+- [Security](#security)
+- [Customization](#customization)
+- [Contributing](#contributing)
+- [License](#license)
 
-```bash
-git clone https://github.com/lhaamed/MediaModule.git
+## Features
+
+- **Upload any file type.** The MIME type is detected from the file content, not from the client.
+- **Polymorphic attachments.** Attach media to any Eloquent model, grouped by *collection* (`featured_image`, `gallery`, ...) and ordered.
+- **Thumbnails on demand.** Generated the first time they are requested, for a configurable list of MIME types, and rebuilt automatically if the file goes missing.
+- **Built on Laravel filesystem disks.** Paths are relative to the disk, so files are not tied to a hard-coded location.
+- **Shared-hosting friendly.** The default `media` disk writes straight into `public/uploads/media`, so `storage:link` is not needed.
+- **Safe upload defaults.** Extensions are validated against the detected content type, dangerous extensions are blocked, and a SHA-256 hash is stored for every file.
+- **Upgrade path from v1.** A migration and an Artisan command convert existing data in place.
+
+## Requirements
+
+| | |
+|---|---|
+| PHP | 8.1 or higher, with `ext-gd` and `ext-fileinfo` |
+| Laravel | 10, 11 or 12 |
+| Image library | `intervention/image` ^3.0 (installed automatically) |
+
+## Installation
+
+The package is installed straight from GitHub. Add the repository to your project's `composer.json`:
+
+```json
+"repositories": [
+    { "type": "vcs", "url": "https://github.com/lhaamed/MediaModule" }
+]
 ```
 
-## ⚙️ پیکربندی 
-
-پس از درون ریزی پکیج‌ ابتدا مسیر اصلی را در فایل composer.json در بخش autoload psr-4 ثبت کنید:
+Then require it:
 
 ```bash
-"autoload": {
-    "psr-4": {
-        "App\\": "app/",
-        "Database\\Factories\\": "database/factories/",
-        "Database\\Seeders\\": "database/seeders/",
-        
-        // در سمت راست مسیر دسترسی به پروژه را مشخص کنید.
-        "lhaamed\\MediaModule\\": "lhaamed/MediaModule/src"
-    }
-},
+# tagged release (recommended)
+composer require lhaamed/media-module:^1.0
+
+# or the latest commit on the main branch
+composer require lhaamed/media-module:dev-main
 ```
 
-بعد از آن خط زیر را در لیست Provider ها قرار دهید:
-```bash
-lhaamed\MediaModule\MediaServiceProvider::class
-```
+The service provider is registered through Laravel's package auto-discovery. No manual `psr-4` entry or provider registration is needed.
 
-سپس در ترمینال دستور زیر را وارد کنید تا پکیج توسط کامپوزر شناسایی شود:
-
-```bash
-composer du
-```
-
-پس از درون ریزی پکیج با استفاده از دستور زیر فایل های پکیج را publish کنید:
-
-```bash
-php artisan vendor:publish --provider="lhaamed\MediaModule\MediaServiceProvider"
-```
-
-یا فقط بخش مورد نظر خود را:
-
-```bash
-# فقط Config
-php artisan vendor:publish --tag=MediaModule-config
-
-# فقط Migration
-php artisan vendor:publish --tag=MediaModule-migrations
-
-# فقط Service
-php artisan vendor:publish --tag=MediaModule-Services
-
-# فقط Provider
-php artisan vendor:publish --tag=MediaModule-provider
-
-# فقط Models
-php artisan vendor:publish --tag=MediaModule-Models
-
-# فقط Traits
-php artisan vendor:publish --tag=MediaModule-traits
-```
-
-و سپس در فایل .env مقادیر اساسی را تنظیم کنید.
-
-
-```bash
-MEDIA_DISK=public
-MEDIA_DISK_DISKS=public,other_disks
-```
-
-
-## 🗄️️ Migration
-
-برای ایجاد جداول مورد نیاز باید حداقل فایل های مربوط به migration را publish کرده باشید.
-بعد از publish با استفاده از دستور زیر جداول را ایجاد کنید.
-
- ⚠️ **هشدار:**  شما در پروژه نباید از مدل های Media و MediaThumbnail استفاده کرده باشید و همچنین جداول medias و media_thumbnails و mediaables نباید وجود داشته باشد.
-
+Run the migrations:
 
 ```bash
 php artisan migrate
 ```
 
-## 🛠️ استفاده 
+This creates the `media`, `mediaables` and `media_thumbnails` tables. Package migrations are loaded from the package itself, so publishing them is optional.
 
-1. دسترسی به سرویس
-```bash
-use MediaModule;
+> **`SSL_ERROR_SYSCALL` when connecting to `api.github.com`?**
+> Composer uses the GitHub API to read repository metadata. If your network blocks it, add `"no-api": true` to the repository entry and install with `--prefer-source`.
 
-Media::upload($file);
-Media::get($id);
-```
-2. استفاده از کلاس سرویس
+## Configuration
 
-```bash
-use lhaamed\MediaModule\Services\MediaService;
+The package config is merged automatically, so nothing has to be published. Set the disks in `.env`:
 
-$service = new MediaService();
-$service->upload($file);
-```
-3. استفاده از مدل‌ها
-
-```bash
-use lhaamed\MediaModule\Models\Media;
-
-$media = Media::find(1);
+```env
+MEDIA_DISK=media
+MEDIA_DISKS=media
 ```
 
-## 📂 ساختار پکیج 
+| Variable | Description | Default |
+|---|---|---|
+| `MEDIA_DISK` | Disk used for new uploads. | `media` |
+| `MEDIA_DISKS` | Comma-separated list of disks uploads are allowed on. | the value of `MEDIA_DISK` |
+
+If your application does not define a disk named `media`, the package defines one for you: files are stored in `public/uploads/media` and served from `APP_URL/uploads/media`. If you define your own `media` disk, yours is used.
+
+Existing records always use the disk stored on their own row, whatever the current setting is.
+
+### Options
+
+Publish the config file only if you need to change these values:
 
 ```bash
-MediaModule/
-├── config/
-│ └── media.php
-├── database/
-├── src/
-│ ├── Models/
-│ │ ├── Media.php
-│ │ └── MediaThumbnail.php
-│ ├── Services/
-│ │ └── MediaService.php
-│ ├── Traits/
-│ │ └── hasFileManager.php
-│ ├── MediaFacade.php
-│ └── MediaServiceProvider.php
-├── .gitignore
-├── composer.json
-├── composer.lock
-└── README.md
+php artisan vendor:publish --tag=media-config
 ```
 
+| Key | Description |
+|---|---|
+| `disk` | Default disk for new uploads. |
+| `disks` | Disks that uploads are allowed on. |
+| `blocked_extensions` | Extensions that are rejected on upload (`php`, `phtml`, `phar`, `exe`, `sh`, ...). Every other type is accepted. |
+| `thumbnailable_mimes` | MIME types that get thumbnails (`image/jpeg`, `image/png`, `image/gif`, `image/webp`). |
+| `placeholder` | Image path, relative to `public/`, returned by `url()` when a file is missing. |
 
-## 🧩 امکانات
+> Config values are merged one level deep. If you publish the file and set `blocked_extensions`, your list replaces the default list instead of extending it. Keep only the keys you want to override.
 
-- 📌 مدیریت آسان رسانه‌ها (آپلود، ذخیره و بازیابی)
-- 📌 مدل‌های آماده برای توسعه و سفارشی‌سازی
-- 📌 قابل توسعه و قابل سفارشی‌سازی
-- 📌 دارای migration و config اختصاصی
-- 📌 امکان publish کردن سرویس‌ها، provider و مدل‌ها  
+To copy the migrations into your project instead of loading them from the package:
 
+```bash
+php artisan vendor:publish --tag=media-migrations
+```
 
+## Quick start
+
+```php
+use lhaamed\MediaModule\MediaFacade;
+use lhaamed\MediaModule\Traits\HasMedia;
+
+// 1. make a model able to hold media
+class Category extends Model
+{
+    use HasMedia;
+}
+
+// 2. upload and attach
+$media = MediaFacade::upload($request->file('image'));
+$category->attachMedia($media, 'featured_image');
+
+// 3. display a thumbnail (falls back to the placeholder image)
+<img src="{{ $category->thumbnailUrl('featured_image', 350) }}">
+```
+
+## Usage
+
+### Uploading
+
+```php
+$media = MediaFacade::upload($request->file('file'));
+
+// with alt text, description and an explicit disk
+$media = MediaFacade::upload($file, [
+    'alt' => 'Company logo',
+    'description' => 'Used in the site header',
+], 'media');
+```
+
+Files are stored as `Y-m/{file_name}.{extension}` on the disk. For example, `Mania Logo.PNG` uploaded in September 2026 becomes `2026-09/mania-logo.png`.
+
+| Field | Value |
+|---|---|
+| `original_name` | The name exactly as the client sent it. |
+| `file_name` | Slug of the original name, without extension (`mania-logo`). |
+| `extension` | File extension (`png`). |
+| `mime_type` | Detected MIME type (`image/png`). |
+| `size` | Size in bytes. |
+| `hash` | SHA-256 of the content. |
+| `disk` | Disk the file is stored on. |
+| `alt`, `description` | Optional text. |
+| `uploaded_by` | Authenticated user id, when there is one. |
+
+`upload()` throws an `Exception` when the disk is not allowed (`403`), the file is invalid or its extension is blocked (`422`), or the file cannot be stored (`500`).
+
+### Attaching media to models
+
+Add the `HasMedia` trait to any model:
+
+```php
+use lhaamed\MediaModule\Traits\HasMedia;
+
+class Article extends Model
+{
+    use HasMedia;
+}
+```
+
+```php
+$article->attachMedia($media, 'featured_image');
+$article->attachMedia($media, 'gallery', order: 2);
+
+$article->mediaIn('featured_image')->first();
+$article->mediaIn('gallery')->get();
+
+$article->detachMedia($media, 'gallery');
+```
+
+- A *collection* is the role a file plays for that model. When omitted it is `default`.
+- `attachMedia()` adds an attachment and never replaces one. For a single-file collection, detach the old file first:
+  `$article->mediaIn('featured_image')->detach();`
+- Attaching the same media to the same model and collection twice is ignored.
+- When a model is deleted its attachments are removed. The `Media` records and files are kept.
+
+### Displaying
+
+```php
+$media->url();                       // file URL, or the placeholder when the file is missing
+$media->thumbnail(350)->url();       // width 350, proportional height
+$media->thumbnail(350, 350)->url();  // exactly 350 x 350
+$article->thumbnailUrl('featured_image', 350);
+```
+
+`thumbnailUrl()` returns the placeholder when the model has no media in that collection.
+
+### Managing media
+
+```php
+MediaFacade::replace($newFile, $media);        // new content, same file_name
+MediaFacade::renameMedia($media, 'new-name');  // slugs the name and moves the file
+$media->handleUpdate(['alt' => 'New alt', 'description' => null]);
+$media->delete();                              // removes the thumbnails and the file too
+```
+
+`replace()` stores the new file before removing the old one, and removes the old thumbnails, since

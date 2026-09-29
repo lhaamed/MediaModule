@@ -17,7 +17,7 @@ return [
     | Disks new uploads may go to (comma separated in .env). Existing media
     | always use the disk stored on their own row.
     */
-    'disks' => array_map('trim', explode(',', env('MEDIA_DISKS', 'public'))),
+    'disks' => array_map('trim', explode(',', env('MEDIA_DISKS', 'media'))),
 
     /*
     |--------------------------------------------------------------------------
