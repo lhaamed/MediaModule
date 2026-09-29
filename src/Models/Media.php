@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use lhaamed\MediaModule\MediaFacade;
 use lhaamed\MediaModule\Traits\HasFileManager;
 use Throwable;
@@ -138,6 +139,35 @@ class Media extends Model
             return $this;
         }
     }
+
+
+    /**
+     * placeholder مخصوص نوع فایل: پسوند، بعد mime دقیق، بعد گروه mime (video/*)، بعد پیش‌فرض.
+     */
+    public function placeholderUrl(): string
+    {
+        $placeholders = config('media.placeholders', []);
+
+        $path = ($this->extension ? ($placeholders['extensions'][$this->extension] ?? null) : null)
+            ?? $placeholders['mimes'][$this->mime_type]
+            ?? $placeholders['mimes'][Str::before($this->mime_type, '/') . '/*']
+            ?? config('media.placeholder');
+
+        return asset($path);
+    }
+
+    /**
+     * عکس: thumbnail. بقیه‌ی فایل‌ها یا فایل گم‌شده: placeholder مخصوص نوعش.
+     */
+    public function previewUrl(int $width = 350, ?int $height = null): string
+    {
+        if ($this->isThumbnailable() && $this->fileExists()) {
+            return $this->thumbnail($width,$height)->url();
+        }
+
+        return $this->placeholderUrl();
+    }
+
 
     // HANDLING CRUD
 

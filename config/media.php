@@ -54,4 +54,26 @@ return [
     */
     'placeholder' => 'assets/default-images/default-gallery-photo.png',
 
+    'placeholders' => [
+        // اول پسوند بررسی می‌شه
+        'extensions' => [
+            'pdf'  => 'assets/default-images/types/pdf.png',
+            'doc'  => 'assets/default-images/types/word.png',
+            'docx' => 'assets/default-images/types/word.png',
+            'xls'  => 'assets/default-images/types/excel.png',
+            'xlsx' => 'assets/default-images/types/excel.png',
+            'zip'  => 'assets/default-images/types/archive.png',
+            'rar'  => 'assets/default-images/types/archive.png',
+            '7z'   => 'assets/default-images/types/archive.png',
+            'exe'  => 'assets/default-images/types/executable.png',
+        ],
+
+        // بعد mime دقیق یا گروه mime (video/*)
+        'mimes' => [
+            'video/*' => 'assets/default-images/types/video.png',
+            'audio/*' => 'assets/default-images/types/audio.png',
+            'image/*' => 'assets/default-images/types/image.png', // عکسی که فایلش گم شده
+        ],
+    ],
+
 ];

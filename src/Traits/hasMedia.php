@@ -54,12 +54,12 @@ trait HasMedia
         $query->detach();
     }
 
-    public function thumbnailUrl(string $collection, int $width , ?int $height): string
+    public function thumbnailUrl(string $collection, int $width = 350, ?int $height = null): string
     {
         $media = $this->mediaIn($collection)->first();
 
         return $media
-            ? $media->thumbnail($width,$height)->url()
+            ? $media->previewUrl($width,$height)
             : Media::getFeaturedImagePlaceholder();
     }
 }
