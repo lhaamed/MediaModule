@@ -1,5 +1,5 @@
 {
-    "name": "lhaamed/MediaModule",
+    "name": "lhaamed/media-module",
     "description": "filesystem for laravel",
     "version": "1.0.0",
     "type": "library",
