@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Storage;
  */
 trait HasFileManager
 {
+
+
+    protected ?array $imageSizeCache = null;
+
     abstract public function storagePath(): string;
 
     public function fileExists(): bool
@@ -41,5 +45,36 @@ trait HasFileManager
     public function pathToFile(): string
     {
         return Storage::disk($this->disk)->path($this->storagePath());
+    }
+
+
+    public function getFileWidth(): ?int
+    {
+        return $this->imageSize()['width'] ?? null;
+    }
+
+    public function getFileHeight(): ?int
+    {
+        return $this->imageSize()['height'] ?? null;
+    }
+
+    /**
+     * ['width' => ..., 'height' => ...] یا null اگه فایل تصویر نباشه یا وجود نداشته باشه.
+     */
+    protected function imageSize(): ?array
+    {
+        // فایل غیرتصویری (مثلاً ویدیوی بزرگ) رو کامل توی حافظه لود نکن
+        if (!str_starts_with($this->mime_type ?? 'image/', 'image/')) {
+            return null;
+        }
+
+        if ($this->imageSizeCache === null) {
+            $contents = Storage::disk($this->disk)->get($this->storagePath());
+            $size = $contents ? @getimagesizefromstring($contents) : false;
+
+            $this->imageSizeCache = $size ? ['width' => $size[0], 'height' => $size[1]] : [];
+        }
+
+        return $this->imageSizeCache ?: null;
     }
 }
