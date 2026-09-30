@@ -5,6 +5,7 @@ namespace lhaamed\MediaModule\Models;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use lhaamed\MediaModule\MediaModels;
 
 class Mediaable extends MorphPivot
 {
@@ -16,7 +17,7 @@ class Mediaable extends MorphPivot
 
     public function media(): BelongsTo
     {
-        return $this->belongsTo(Media::class);
+        return $this->belongsTo(MediaModels::media());
     }
 
     public function mediaable(): MorphTo

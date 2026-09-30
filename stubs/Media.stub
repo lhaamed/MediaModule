@@ -1,0 +1,10 @@
+<?php
+
+namespace App\Models;
+
+use lhaamed\MediaModule\Models\Media as BaseMedia;
+
+class Media extends BaseMedia
+{
+    // use EssentialTrait;
+}

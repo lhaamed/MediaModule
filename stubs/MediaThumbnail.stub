@@ -1,0 +1,10 @@
+<?php
+
+namespace App\Models;
+
+use lhaamed\MediaModule\Models\MediaThumbnail as BaseMediaThumbnail;
+
+class MediaThumbnail extends BaseMediaThumbnail
+{
+    //
+}

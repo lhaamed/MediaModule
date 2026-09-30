@@ -34,6 +34,11 @@ class MediaServiceProvider extends ServiceProvider
                 __DIR__ . '/../resources/file-icons' => public_path('vendor/media/placeholders'),
             ], 'media-assets');
 
+            $this->publishes([
+                __DIR__ . '/../stubs/Media.stub' => app_path('Models/Media.php'),
+                __DIR__ . '/../stubs/MediaThumbnail.stub' => app_path('Models/MediaThumbnail.php'),
+            ], 'media-models');
+
         }
     }
 }

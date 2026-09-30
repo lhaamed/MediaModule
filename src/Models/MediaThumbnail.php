@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
+use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Traits\HasFileManager;
 
 class MediaThumbnail extends Model
@@ -45,7 +46,7 @@ class MediaThumbnail extends Model
 
     public function media(): BelongsTo
     {
-        return $this->belongsTo(Media::class);
+        return $this->belongsTo(MediaModels::media());
     }
 
     // GETTERS (proxied from the parent media, so a thumbnail can be used wherever a Media is)

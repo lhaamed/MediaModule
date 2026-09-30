@@ -3,6 +3,7 @@
 namespace lhaamed\MediaModule\Traits;
 
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Models\Media;
 use lhaamed\MediaModule\Models\Mediaable;
 
@@ -21,7 +22,7 @@ trait HasMedia
 
     public function media(): MorphToMany
     {
-        return $this->morphToMany(Media::class, 'mediaable')
+        return $this->morphToMany(MediaModels::media(), 'mediaable')
             ->using(Mediaable::class)
             ->withPivot('collection', 'order')
             ->orderByPivot('order');
@@ -60,6 +61,6 @@ trait HasMedia
 
         return $media
             ? $media->previewUrl($width,$height)
-            : Media::getFeaturedImagePlaceholder();
+            : MediaModels::media()::placeholderFor($media->exnteition);
     }
 }

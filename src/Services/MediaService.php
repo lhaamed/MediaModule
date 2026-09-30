@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Intervention\Image\Drivers\Gd\Driver;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Interfaces\ImageInterface;
+use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Models\Media;
 use lhaamed\MediaModule\Models\MediaThumbnail;
 use Symfony\Component\Mime\MimeTypes;
@@ -21,8 +22,11 @@ class MediaService
     // UPLOAD / REPLACE
 
     /**
+     * @param UploadedFile $file
      * @param array{alt?: string, description?: string} $options
-     * @throws Exception
+     * @param string|null $disk
+     * @return Media
+     * @throws Throwable
      */
     public function upload(UploadedFile $file, array $options = [], ?string $disk = null): Media
     {
@@ -32,29 +36,23 @@ class MediaService
             throw new Exception('the chosen disk is unavailable.', 403);
         }
 
-        $media = new Media([
+        $media = self::reserve([
             ...self::describe($file),
             'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
-            'file_name' => self::generateUniqueName($file->getClientOriginalName(), $disk),
             'disk' => $disk,
             'alt' => $options['alt'] ?? null,
             'description' => $options['description'] ?? null,
-        ]);
+        ], $file->getClientOriginalName());
 
-        // set before storing: the directory (Y-m) is derived from created_at,
-        // so the file and the record can never disagree at a month boundary.
-        $media->created_at = now();
         $path = $media->storagePath();
 
-        if ($file->storeAs(dirname($path), basename($path), ['disk' => $disk]) === false) {
-            throw new Exception('something bad happened in moving file to directory.', 500);
-        }
-
         try {
-            $media->save();
+            if ($file->storeAs(dirname($path), basename($path), ['disk' => $disk]) === false) {
+                throw new Exception('something bad happened in moving file to directory.', 500);
+            }
         } catch (Throwable $e) {
-            // do not leave an orphan file behind (e.g. unique violation from a concurrent upload).
-            Storage::disk($disk)->delete($path);
+            // the name is ours (reserved above), so removing the row is safe.
+            $media->delete();
             throw $e;
         }
 
@@ -142,7 +140,7 @@ class MediaService
         Storage::disk($media->disk)->put($path, $contents);
 
         try {
-            return MediaThumbnail::create([
+            return MediaModels::thumbnail()::create([
                 'media_id' => $media->id,
                 'file_name' => $path,
                 'width' => $realWidth,
@@ -199,7 +197,7 @@ class MediaService
         if ($name === $media->file_name) {
             return $name;
         }
-        if (Media::where('disk', $media->disk)->where('file_name', $name)->exists()) {
+        if (MediaModels::media()::where('disk', $media->disk)->where('file_name', $name)->exists()) {
             throw new Exception("the name '{$name}' is already taken.", 422);
         }
 
@@ -274,23 +272,59 @@ class MediaService
     }
 
     /**
+     * Inserts the row with a free file_name. The unique index (disk, file_name) is the real lock:
+     * on a collision (concurrent upload) a new name is generated and the insert is retried.
+     *
+     * @throws QueryException
+     */
+    private static function reserve(array $attributes, string $originalName, int $maxAttempts = 5): Media
+    {
+        $model = MediaModels::media();
+        for ($attempt = 1; ; $attempt++) {
+
+
+            $media = new $model([
+                ...$attributes,
+                'file_name' => self::generateUniqueName($originalName, $attributes['disk']),
+            ]);
+
+            // the directory (Y-m) is derived from created_at, so set it before storing.
+            $media->created_at = now();
+
+            try {
+                $media->save();
+
+                return $media;
+            } catch (QueryException $e) {
+                // SQLSTATE 23xxx = integrity constraint violation (unique index)
+                if ($attempt >= $maxAttempts || !str_starts_with((string) $e->getCode(), '23')) {
+                    throw $e;
+                }
+            }
+        }
+    }
+
+    /**
      * slug of the original name without extension, e.g. "Mania Service Logo.PNG" => "mania-service-logo".
      * appends -1, -2, ... when the name is already taken on this disk.
+     * This is only a suggestion: uniqueness is enforced by the DB index (see reserve()).
      */
     private static function generateUniqueName(string $originalName, string $disk): string
     {
         $base = self::slugify(pathinfo($originalName, PATHINFO_FILENAME));
 
         // slug only contains [a-z0-9-], so it is safe inside LIKE.
-        $taken = Media::where('disk', $disk)
-            ->where('file_name', 'like', $base . '%')
+        $taken = MediaModels::media()::withoutGlobalScope('order')
+            ->where('disk', $disk)
+            ->where(fn ($q) => $q->where('file_name', $base)->orWhere('file_name', 'like', $base . '-%'))
             ->pluck('file_name')
+            ->flip()
             ->all();
 
-        if (!in_array($base, $taken, true)) return $base;
+        if (!isset($taken[$base])) return $base;
 
         $i = 1;
-        while (in_array("{$base}-{$i}", $taken, true)) $i++;
+        while (isset($taken["{$base}-{$i}"])) $i++;
 
         return "{$base}-{$i}";
     }

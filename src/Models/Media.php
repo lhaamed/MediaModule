@@ -2,7 +2,6 @@
 
 namespace lhaamed\MediaModule\Models;
 
-use App\Traits\EssentialTrait;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
@@ -12,16 +11,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use lhaamed\MediaModule\MediaFacade;
+use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Traits\HasFileManager;
 use Throwable;
 
 class Media extends Model
 {
-    use EssentialTrait,HasFileManager;
+    use HasFileManager;
 
-    private const string MODEL_NAME = 'فایل';
-    private const string MODEL_NAME_PLURAL = 'فایل‌ها';
-    private const string GLOBAL_ICON = "rectangle-history";
 
     protected $fillable = [
         'original_name',
@@ -73,7 +70,7 @@ class Media extends Model
 
     public function thumbnails(): HasMany
     {
-        return $this->hasMany(MediaThumbnail::class);
+        return $this->hasMany(MediaModels::thumbnail());
     }
 
     // GETTERS
@@ -148,18 +145,26 @@ class Media extends Model
 
 
     /**
-     * placeholder مخصوص نوع فایل: پسوند، بعد mime دقیق، بعد گروه mime (video/*)، بعد پیش‌فرض.
+     * Placeholder for a file type, without needing a Media instance.
+     * Order: extension, exact mime, mime group (video/*), default.
+     *
+     * @param string|array|null $extension  'pdf' or ['png', 'jpg'] (the first one is used)
      */
-    public function placeholderUrl(): string
+    public static function placeholderFor(string|array|null $extension = null, ?string $mime = null): string
     {
+        $extension = strtolower(ltrim((string) (is_array($extension) ? reset($extension) : $extension), '.'));
         $placeholders = config('media.placeholders', []);
 
-        $path = ($this->extension ? ($placeholders['extensions'][$this->extension] ?? null) : null)
-            ?? $placeholders['mimes'][$this->mime_type]
-            ?? $placeholders['mimes'][Str::before($this->mime_type, '/') . '/*']
+        $path = ($extension !== '' ? ($placeholders['extensions'][$extension] ?? null) : null)
+            ?? ($mime ? ($placeholders['mimes'][$mime] ?? $placeholders['mimes'][Str::before($mime, '/') . '/*'] ?? null) : null)
             ?? config('media.placeholder');
 
         return asset($path);
+    }
+
+    public function placeholderUrl(): string
+    {
+        return self::placeholderFor($this->extension, $this->mime_type);
     }
 
     /**
@@ -172,6 +177,11 @@ class Media extends Model
         }
 
         return $this->placeholderUrl();
+    }
+
+    public static function uploadPlaceholder(): string
+    {
+        return asset(config('media.upload_placeholder'));
     }
 
 

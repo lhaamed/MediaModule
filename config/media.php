@@ -52,7 +52,8 @@ return [
     |--------------------------------------------------------------------------
     | Path (relative to public/) returned by ->url() when the file is missing.
     */
-    'placeholder' => 'vendor/media/placeholders/png.png',
+    'placeholder' => 'vendor/media/placeholders/unknown.png',
+    'upload_placeholder' => 'vendor/media/placeholders/upload.png',
 
     'placeholders' => [
         // اول پسوند بررسی می‌شه
@@ -82,6 +83,20 @@ return [
             'audio/*' => 'vendor/media/placeholders/mp3.png',
             'image/*' => 'vendor/media/placeholders/png.png', // عکسی که فایلش گم شده
         ],
+    ],
+
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Publish Models
+    |--------------------------------------------------------------------------
+    | referencing publish models.
+    */
+
+    'models' => [
+        'media' => \lhaamed\MediaModule\Models\Media::class,
+        'thumbnail' => \lhaamed\MediaModule\Models\MediaThumbnail::class,
     ],
 
 ];
