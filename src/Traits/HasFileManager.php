@@ -2,7 +2,9 @@
 
 namespace lhaamed\MediaModule\Traits;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Number;
 
 /**
  * File helpers shared by Media and MediaThumbnail.
@@ -47,6 +49,10 @@ trait HasFileManager
         return Storage::disk($this->disk)->path($this->storagePath());
     }
 
+    protected function sizeForHumans(): Attribute
+    {
+        return Attribute::get(fn () => Number::fileSize($this->size, precision: 1));
+    }
 
     public function getFileWidth(): ?int
     {

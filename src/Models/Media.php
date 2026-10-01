@@ -2,11 +2,13 @@
 
 namespace lhaamed\MediaModule\Models;
 
+use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -52,6 +54,10 @@ class Media extends Model
 
         // thumbnails first: each model removes its own row and file.
         static::deleting(function (Media $media) {
+            if ($media->isInUse()) {
+                throw new Exception('این فایل در جایی استفاده شده و قابل حذف نیست.', 409);
+            }
+
             $media->thumbnails->each->delete();
         });
 
@@ -72,6 +78,12 @@ class Media extends Model
     {
         return $this->hasMany(MediaModels::thumbnail());
     }
+
+    public function mediaables(): HasMany
+    {
+        return $this->hasMany(Mediaable::class);
+    }
+
 
     // GETTERS
 
@@ -104,6 +116,41 @@ class Media extends Model
     public function isThumbnailable(): bool
     {
         return in_array($this->mime_type, config('media.thumbnailable_mimes', []), true);
+    }
+
+
+    public function usages(): Collection
+    {
+        $pivot = $this->mediaables()
+            ->with('mediaable')
+            ->get()
+            ->map(fn ($row) => [
+                'type'   => class_basename($row->mediaable_type),
+                'id'     => $row->mediaable_id,
+                'model'  => $row->mediaable,
+                'source' => 'mediaables',
+            ]);
+
+        $direct = collect(config('media.usages', []))->flatMap(function ($target) {
+            [$table, $column] = explode('.', $target);
+
+            return DB::table($table)
+                ->where($column, $this->getKey())
+                ->pluck('id')
+                ->map(fn ($id) => [
+                    'type'   => $table,
+                    'id'     => $id,
+                    'model'  => null,
+                    'source' => "$table.$column",
+                ]);
+        });
+
+        return $pivot->concat($direct);
+    }
+
+    public function isInUse(): bool
+    {
+        return $this->usages()->isNotEmpty();
     }
 
     /**

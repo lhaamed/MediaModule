@@ -61,6 +61,6 @@ trait HasMedia
 
         return $media
             ? $media->previewUrl($width,$height)
-            : MediaModels::media()::placeholderFor($media->exnteition);
+            : MediaModels::media()::placeholderFor($media?->exnteition ?: 'file');
     }
 }
