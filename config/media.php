@@ -28,7 +28,7 @@ return [
     */
     'blocked_extensions' => [
         'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pht', 'phps', 'phar',
-        'htaccess', 'cgi', 'pl', 'py', 'sh', 'bash',
+        'htaccess', 'cgi', 'pl', 'py', 'sh', 'bash','js','svg','shtml','htm','html',
         'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'scr', 'jar',
     ],
 
@@ -63,6 +63,7 @@ return [
             'docx' => 'vendor/media/placeholders/docx.png',
             'gif'  => 'vendor/media/placeholders/gif.png',
             'jpg'  => 'vendor/media/placeholders/jpg.png',
+            'jpeg'  => 'vendor/media/placeholders/jpg.png',
             'json'  => 'vendor/media/placeholders/json.png',
             'mp3'  => 'vendor/media/placeholders/mp3.png',
             'mp4'  => 'vendor/media/placeholders/mp4.png',
@@ -75,6 +76,7 @@ return [
             'xls'  => 'vendor/media/placeholders/xls.png',
             'xlsx' => 'vendor/media/placeholders/xlsx.png',
             'zip'  => 'vendor/media/placeholders/zip.png',
+            'sql'  => 'vendor/media/placeholders/sql.png',
         ],
 
         // بعد mime دقیق یا گروه mime (video/*)

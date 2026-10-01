@@ -337,22 +337,9 @@ class MediaService
      */
     private static function resolveExtension(UploadedFile $file, string $mimeType): string
     {
-        $client = strtolower($file->getClientOriginalExtension());
-        $known = MimeTypes::getDefault()->getExtensions($mimeType);
+        $ext = strtolower($file->getClientOriginalExtension());
 
-        if ($client !== '' && (empty($known) || in_array($client, $known, true))) {
-            $extension = $client;
-        } else {
-            $extension = $known[0] ?? 'bin';
-        }
-
-        $extension = substr(preg_replace('/[^a-z0-9]/', '', $extension), 0, 20) ?: 'bin';
-
-        if (in_array($extension, config('media.blocked_extensions', []), true)) {
-            throw new Exception("files of type .{$extension} are not allowed.", 422);
-        }
-
-        return $extension;
+        return $ext !== '' ? $ext : ($file->guessExtension() ?: 'bin');
     }
 
     private static function thumbnailPath(Media $media, int $width, int $height): string
