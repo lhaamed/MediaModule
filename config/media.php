@@ -84,6 +84,7 @@ return [
             'video/*' => 'vendor/media/placeholders/mp4.png',
             'audio/*' => 'vendor/media/placeholders/mp3.png',
             'image/*' => 'vendor/media/placeholders/png.png', // عکسی که فایلش گم شده
+            'text/*' => 'vendor/media/placeholders/txt.png',
         ],
     ],
 
