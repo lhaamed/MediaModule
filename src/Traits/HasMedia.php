@@ -2,6 +2,7 @@
 
 namespace lhaamed\MediaModule\Traits;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Models\Media;
@@ -33,6 +34,15 @@ trait HasMedia
         return $this->media()->wherePivot('collection', $collection);
     }
 
+    public function mediaAt(string $collection, int $order): ?Model
+    {
+        return $this->mediaIn($collection)
+            ->wherePivot('order', $order)
+            ->orderBy('media.id')
+            ->first()
+            ?? $this->mediaIn($collection)->first();
+    }
+
     public function attachMedia(Media|int $media, string $collection = 'default', int $order = 0): void
     {
         $id = $media instanceof Media ? $media->id : $media;
@@ -55,12 +65,12 @@ trait HasMedia
         $query->detach();
     }
 
-    public function previewUrl(string $collection, ?int $width = null, ?int $height = null): string
+    public function previewUrl(string $collection, ?int $width = null, ?int $height = null, int $order = 0): string
     {
         $media = $this->mediaIn($collection)->first();
 
         return $media
-            ? $media->previewUrl($width,$height)
+            ? $media->previewUrl($width, $height)
             : MediaModels::media()::placeholderFor($media?->exnteition ?: 'general');
     }
 }

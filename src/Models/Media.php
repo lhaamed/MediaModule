@@ -180,12 +180,8 @@ class Media extends Model
         try {
             $thumbnail ??= MediaFacade::generateThumbnail($this, $width, $height);
 
-            if ($thumbnail === null) {
-                return $this;
-            }
-            if (!$thumbnail->fileExists()) {
-                MediaFacade::repairThumbnail($thumbnail);
-            }
+            if ($thumbnail === null) return $this;
+            if (!$thumbnail->fileExists()) MediaFacade::repairThumbnail($thumbnail);
 
             return $thumbnail;
         } catch (Throwable $exception) {
