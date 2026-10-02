@@ -65,6 +65,11 @@ trait HasMedia
         $query->detach();
     }
 
+    public function detachAllMedia(string $collection): void
+    {
+        $this->media()->wherePivot('collection', $collection)->detach();
+    }
+
     public function previewUrl(string $collection, ?int $width = null, ?int $height = null, int $order = 0): string
     {
         $media = $this->mediaIn($collection)->first();
