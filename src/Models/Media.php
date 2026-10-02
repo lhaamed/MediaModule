@@ -148,6 +148,11 @@ class Media extends Model
         return $pivot->concat($direct);
     }
 
+    public function isImage(): bool
+    {
+        return str_starts_with((string) $this->mime_type, 'image/');
+    }
+
     public function isInUse(): bool
     {
         return $this->usages()->isNotEmpty();
@@ -217,13 +222,18 @@ class Media extends Model
     /**
      * عکس: thumbnail. بقیه‌ی فایل‌ها یا فایل گم‌شده: placeholder مخصوص نوعش.
      */
-    public function previewUrl(int $width = 350, ?int $height = null): string
+    public function previewUrl(?int $width = null, ?int $height = null): string
     {
-        if ($this->isThumbnailable() && $this->fileExists()) {
-            return $this->thumbnail($width,$height)->url();
+
+        if (!$this->isImage() || !$this->fileExists()) {
+            return $this->placeholderUrl();
         }
 
-        return $this->placeholderUrl();
+        if ($width === null) {
+            return $this->fileURL();
+        }
+
+        return $this->thumbnail($width, $height)->url();
     }
 
     public static function uploadPlaceholder(): string

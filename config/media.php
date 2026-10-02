@@ -77,6 +77,7 @@ return [
             'xlsx' => 'vendor/media/placeholders/xlsx.png',
             'zip'  => 'vendor/media/placeholders/zip.png',
             'sql'  => 'vendor/media/placeholders/sql.png',
+            'general'  => 'vendor/media/placeholders/general.png',
         ],
 
         // بعد mime دقیق یا گروه mime (video/*)
