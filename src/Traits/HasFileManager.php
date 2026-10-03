@@ -75,8 +75,19 @@ trait HasFileManager
         }
 
         if ($this->imageSizeCache === null) {
-            $contents = Storage::disk($this->disk)->get($this->storagePath());
-            $size = $contents ? @getimagesizefromstring($contents) : false;
+            $disk = Storage::disk($this->disk);
+            $path = $this->storagePath();
+
+            $size = false;
+
+            if ($disk->exists($path)) {
+                try {
+                    $contents = $disk->get($path);
+                    $size = $contents ? @getimagesizefromstring($contents) : false;
+                } catch (\Throwable) {
+                    $size = false;
+                }
+            }
 
             $this->imageSizeCache = $size ? ['width' => $size[0], 'height' => $size[1]] : [];
         }
