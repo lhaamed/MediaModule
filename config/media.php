@@ -2,6 +2,21 @@
 
 return [
 
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Hash file names
+    |--------------------------------------------------------------------------
+    | When enabled, uploaded files are stored under a hashed, non-guessable
+    | name instead of a name derived from the original file name. The original
+    | name is still kept in the database. When disabled, the default naming
+    | logic is used.
+    */
+
+    'hash_filenames' => env('MEDIA_HASH_FILENAMES', false),
+    'hash_algorithm' => env('MEDIA_HASH_ALGORITHM', 'sha256'),
+
     /*
     |--------------------------------------------------------------------------
     | Default disk
@@ -93,9 +108,11 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Publish Models
+    | Models
     |--------------------------------------------------------------------------
-    | referencing publish models.
+    | The Eloquent models used by the package. To customize behavior or add
+    | relations, extend the default models in your application and replace
+    | the class names below with your own.
     */
 
     'models' => [

@@ -311,8 +311,19 @@ class MediaService
      */
     private static function generateUniqueName(string $originalName, string $disk): string
     {
-        $base = self::slugify(pathinfo($originalName, PATHINFO_FILENAME));
+        if (config('media.hash_filenames')) {
 
+            $algo = config('media.hash_algorithm', 'sha256');
+
+            dd(hash_algos());
+            if (!in_array($algo, hash_algos(), true)) {
+                $algo = 'sha256';
+            }
+
+            return hash($algo, Str::uuid()->toString());
+        }
+
+        $base = self::slugify(pathinfo($originalName, PATHINFO_FILENAME));
         // slug only contains [a-z0-9-], so it is safe inside LIKE.
         $taken = MediaModels::media()::withoutGlobalScope('order')
             ->where('disk', $disk)
@@ -320,12 +331,9 @@ class MediaService
             ->pluck('file_name')
             ->flip()
             ->all();
-
         if (!isset($taken[$base])) return $base;
-
         $i = 1;
         while (isset($taken["{$base}-{$i}"])) $i++;
-
         return "{$base}-{$i}";
     }
 
