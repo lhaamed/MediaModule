@@ -2,6 +2,7 @@
 
 namespace lhaamed\MediaModule\Traits;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use lhaamed\MediaModule\MediaModels;
@@ -20,6 +21,13 @@ trait HasMedia
             $model->media()->detach();
         });
     }
+
+
+    public function scopeHasMediaIn(Builder $query, string $collection = 'default'): Builder
+    {
+        return $query->whereHas('media', fn ($q) => $q->where('mediaables.collection', $collection));
+    }
+
 
     public function media(): MorphToMany
     {
