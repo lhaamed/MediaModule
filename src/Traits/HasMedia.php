@@ -22,12 +22,14 @@ trait HasMedia
         });
     }
 
+    // SCOPE
 
     public function scopeHasMediaIn(Builder $query, string $collection = 'default'): Builder
     {
         return $query->whereHas('media', fn ($q) => $q->where('mediaables.collection', $collection));
     }
 
+    // RELATION
 
     public function media(): MorphToMany
     {
@@ -41,6 +43,18 @@ trait HasMedia
     {
         return $this->media()->wherePivot('collection', $collection);
     }
+
+
+    public function hasMediaFileIn(string $collection = 'default'): bool
+    {
+        $media = $this->relationLoaded('media')
+            ? $this->media->filter(fn ($item) => $item->pivot->collection === $collection)
+            : $this->mediaIn($collection)->get();
+
+        // اولین فایلی که روی دیسک بود کافیه و بقیه چک نمی‌شن
+        return $media->contains(fn ($item) => $item->fileExists());
+    }
+
 
     public function mediaAt(string $collection, int $order): ?Model
     {
