@@ -105,6 +105,18 @@ return [
     ],
 
 
+    /*
+    |--------------------------------------------------------------------------
+    | Usages
+    |--------------------------------------------------------------------------
+    | Columns in your app that hold a media id directly (not through the
+    | mediaables pivot), as "table.column". A media referenced by any of
+    | them cannot be deleted. The referencing table needs an `id` column.
+    */
+    'usages' => [
+        // 'users.avatar_media_id',
+    ],
+
 
     /*
     |--------------------------------------------------------------------------

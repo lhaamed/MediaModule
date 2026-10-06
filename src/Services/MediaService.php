@@ -14,6 +14,7 @@ use Intervention\Image\Interfaces\ImageInterface;
 use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Models\Media;
 use lhaamed\MediaModule\Models\MediaThumbnail;
+use Symfony\Component\Mime\MimeTypes;
 use Throwable;
 
 class MediaService
@@ -314,7 +315,6 @@ class MediaService
 
             $algo = config('media.hash_algorithm', 'sha256');
 
-            dd(hash_algos());
             if (!in_array($algo, hash_algos(), true)) {
                 $algo = 'sha256';
             }
@@ -336,9 +336,11 @@ class MediaService
         return "{$base}-{$i}";
     }
 
+
     /**
-     * keep the client extension only when it is valid for the detected mime type
-     * (so "shell.php" with image content is stored as .png), then apply the deny list.
+     * Keeps the client extension untouched (guessed from content only when missing),
+     * and rejects anything on the blocked list. Enforced here, so it holds even
+     * when AllowedUpload is not used.
      *
      * @throws Exception
      */
@@ -346,7 +348,15 @@ class MediaService
     {
         $ext = strtolower($file->getClientOriginalExtension());
 
-        return $ext !== '' ? $ext : ($file->guessExtension() ?: 'bin');
+        if ($ext === '') {
+            $ext = $file->guessExtension() ?: 'bin';
+        }
+
+        if (in_array($ext, config('media.blocked_extensions', []), true)) {
+            throw new Exception('This file type is not allowed.', 422);
+        }
+
+        return $ext;
     }
 
     private static function thumbnailPath(Media $media, int $width, int $height): string
