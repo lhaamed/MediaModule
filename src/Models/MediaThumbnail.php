@@ -5,6 +5,7 @@ namespace lhaamed\MediaModule\Models;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Traits\HasFileManager;
@@ -37,7 +38,7 @@ class MediaThumbnail extends Model
             $disk = $thumbnail->disk;
 
             if ($disk) {
-                Storage::disk($disk)->delete($thumbnail->file_name);
+                DB::afterCommit(fn () => Storage::disk($disk)->delete($thumbnail->file_name));
             }
         });
     }

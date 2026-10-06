@@ -14,7 +14,6 @@ use Intervention\Image\Interfaces\ImageInterface;
 use lhaamed\MediaModule\MediaModels;
 use lhaamed\MediaModule\Models\Media;
 use lhaamed\MediaModule\Models\MediaThumbnail;
-use Symfony\Component\Mime\MimeTypes;
 use Throwable;
 
 class MediaService
@@ -233,7 +232,7 @@ class MediaService
 
     public function deleteMedia(Media $media): bool
     {
-        return (bool) $media->delete();
+        return DB::transaction(fn () => (bool) $media->delete());
     }
 
     public function deleteThumbnail(MediaThumbnail $thumbnail): bool

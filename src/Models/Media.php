@@ -63,7 +63,7 @@ class Media extends Model
 
         // main file last, only after the row is really gone.
         static::deleted(function (Media $media) {
-            Storage::disk($media->disk)->delete($media->storagePath());
+            DB::afterCommit(fn () => Storage::disk($media->disk)->delete($media->storagePath()));
         });
     }
 
@@ -239,7 +239,6 @@ class Media extends Model
 
 
     // HANDLING CRUD
-
     public function handleUpdate(array $request)
     {
         return DB::transaction(function () use ($request) {
@@ -254,5 +253,13 @@ class Media extends Model
 
             return $this;
         });
+    }
+
+
+
+    // OVERRIDES
+    public function delete()
+    {
+        return DB::transaction(fn () => parent::delete());
     }
 }
