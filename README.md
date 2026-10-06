@@ -37,7 +37,7 @@ This package was extracted from a **live production system with years of accumul
 ```mermaid
 erDiagram
     MEDIA ||--o{ MEDIA_THUMBNAILS : "has (cascade delete)"
-    MEDIA ||--o{ MEDIAABLES : "attached via (cascade delete)"
+    MEDIA ||--o{ MEDIAABLES : "attached via (cascade safe)"
     MEDIA {
         bigint id PK
         string file_name "unique per disk"
