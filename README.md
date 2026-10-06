@@ -27,7 +27,7 @@ This package was extracted from a **live production system with years of accumul
 | **On-demand thumbnails** | Generated lazily for an allow-list of MIME types, no upscaling, self-healing if the file goes missing |
 | **Delete lock** | `isInUse()` blocks deletion while a file is referenced by an attachment or by configured FK columns |
 | **Transactional file ops** | Replace, rename and delete keep DB and disk consistent; files are removed only `afterCommit` |
-| **Validation** | `AllowedUpload` rule with per-call MIME / extension restrictions and a global deny-list |
+| **Validation** | Deny-list enforced inside the service, plus an `AllowedUpload` rule for per-call MIME / extension restrictions |
 | **Placeholders** | File-type-aware fallback icons (by extension, exact MIME, MIME group) for missing files |
 | **Swappable models** | Extend `Media` / `MediaThumbnail` in your app and register them via config |
 | **Legacy upgrade** | `upgrade` migration and `media:upgrade` command with `--dry-run` reporting |
@@ -135,7 +135,7 @@ Main options in `config/media.php`:
 | `disks` | `media` (`MEDIA_DISKS`, comma-separated) | Allow-list of disks uploads may target |
 | `hash_filenames` | `false` | Store files under a non-guessable hashed name; the original name stays in the DB |
 | `hash_algorithm` | `sha256` | Algorithm for hashed names |
-| `blocked_extensions` | `php`, `phtml`, `phar`, `exe`, `sh`, `html`, `svg`, ... | Deny-list enforced by `AllowedUpload` |
+| `blocked_extensions` | `php`, `phtml`, `phar`, `exe`, `sh`, `html`, `svg`, ... | Deny-list enforced on every upload by `MediaService` (and by `AllowedUpload`) |
 | `thumbnailable_mimes` | jpeg, png, gif, webp | Only these types get thumbnails |
 | `placeholders` | per extension / MIME group | Fallback icons for missing or non-image files |
 | `usages` | `[]` | Extra `table.column` references that lock a file against deletion |
@@ -230,11 +230,12 @@ class Media extends \lhaamed\MediaModule\Models\Media
 
 ## Reliability details
 
-- **Upload** reserves the DB row first, then stores the file. If storing fails, the row is removed, so no orphan rows.
+- **Upload** rejects blocked types before reserving the database row, so a rejected file leaves no trace. Otherwise it reserves the row first, then stores the file; if storing fails, the row is removed, so no orphan rows.
 - **Replace** stores the new file in a transaction and deletes the old one only after success. Stale thumbnails are invalidated.
 - **Rename** runs in a transaction. On failure the DB is rolled back and the in-memory model is restored.
 - **Delete** removes thumbnails first and deletes the physical file only after the transaction commits.
 - **Thumbnail creation** is concurrency-safe: when a parallel request wins the insert, the existing row is returned and the duplicate file is cleaned up.
+
 
 ## Upgrading from a legacy (v1) schema
 
@@ -262,7 +263,10 @@ What the migration does:
 
 ## Security notes
 
-- Always validate uploads with `AllowedUpload`. It checks **every** extension segment, so `shell.php.jpg` is rejected.
+- The deny-list is enforced inside `MediaService` (`upload()` and `replace()`), so a blocked extension can never be stored, even when `AllowedUpload` is not used. The check runs before any database row is created.
+- Use `AllowedUpload` for per-field restrictions (MIME types / extensions) and friendly validation errors. It checks **every** extension segment, so `shell.php.jpg` is rejected at validation time.
+- Stored file names are slugged (dots are dropped) and only the final extension is kept. Extensions are stored exactly as uploaded, never rewritten.
+- Because content is not inspected for hidden code, disable script execution in the upload directory (e.g. `.htaccess` or an nginx rule) for defense in depth.
 - Use `hash_filenames` for non-guessable public URLs.
 - The default deny-list also blocks `svg` and `html`, which can carry scripts. Narrow it only if you sanitize them.
 
